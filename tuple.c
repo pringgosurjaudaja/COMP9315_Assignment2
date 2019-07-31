@@ -70,39 +70,45 @@ void freeVals(char **vals, int nattrs)
 
 Bits tupleHash(Reln r, Tuple t)
 {
-  //char buf[MAXBITS+1];
+  char buf[MAXBITS+1];
+  //test buffer
+  char buff[MAXBITS+1];
   	Count nvals = nattrs(r);
 	char **vals = malloc(nvals*sizeof(char *));
 	int i,a,b;
 	assert(vals != NULL);
 	tupleVals(t, vals);
 	//Bits hash = hash_any((unsigned char *)vals[0],strlen(vals[0]));
-	
+	printChVec(chvec(r));
 	//these are the hash values of the columns
 	Bits h[nvals + 1];
 	Bits res = 0, oneBit;
-	for(i=1;i <= nvals;i++){
+	for(i=0;i < nvals;i++){
 	  h[i] = hash_any((unsigned char *)vals[i],strlen(vals[i]));
-	  //printf("%s","ffrrf");
+	  
+	  //following 2 lines just to check hash value of attributes
+	  bitsString(h[i],buff);
+	  printf("%d --- %s\n",i,buff);
 	}
 	
 	//find value of d
 	//r->cv is choice vector of relation
-	
-	ChVecItem *choicevector = chvec(r);
-	
+	ChVecItem *cv = chvec(r);
+	//printChVec(chvec(r));
 	for(i = 0; i < depth(r); i++){
-	  a = choicevector[i].att;
-	  b = choicevector[i].bit;
+	  a = cv[i].att;
+	  b = cv[i].bit;
 	 
 	  //left shift
 	  oneBit = bitIsSet(h[a],b);
 	  res = res | (oneBit << i);
 	}
-	return res;
 	//bitsString(hash,buf);
-	//printf("hash(%s) = %s\n", vals[0], buf);
-	//return hash;
+	bitsString(res,buf);
+	
+	//Testing res,buf
+	printf("hash(%s) = %s\n", vals[0], buf);
+	return res;
 }
 
 // compare two tuples (allowing for "unknown" values)
