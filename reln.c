@@ -9,6 +9,7 @@
 #include "chvec.h"
 #include "bits.h"
 #include "hash.h"
+#include "math.h"
 
 #define HEADERSIZE (3*sizeof(Count)+sizeof(Offset))
 
@@ -23,6 +24,8 @@ struct RelnRep {
 	FILE  *info;   // handle on info file
 	FILE  *data;   // handle on data file
 	FILE  *ovflow; // handle on ovflow file
+  int k; //handle on k insertions
+  
 };
 
 // create a new relation (three files)
@@ -44,6 +47,8 @@ Status newRelation(char *name, Count nattrs, Count npages, Count d, char *cv)
 	sprintf(fname,"%s.ovflow",name);
 	r->ovflow = fopen(fname,"w");
 	assert(r->ovflow != NULL);
+	
+	r->k = 0;
 	int i;
 	for (i = 0; i < npages; i++) addPage(r->data);
 	closeRelation(r);
@@ -121,6 +126,16 @@ void closeRelation(Reln r)
 // returns NO_PAGE if insert fails completely
 // TODO: include splitting and file expansion
 
+//power of a number
+int power(int base, unsigned int exp) {
+    int i, result = 1;
+    for (i = 0; i < exp; i++)
+        result *= base;
+    return result;
+ }
+
+
+
 PageID addToRelation(Reln r, Tuple t)
 {
 	Bits h, p;
@@ -132,15 +147,77 @@ PageID addToRelation(Reln r, Tuple t)
 		p = getLower(h, r->depth);
 		if (p < r->sp) p = getLower(h, r->depth+1);
 	}
+	int page_capacity = (int)floor(1024/(10 * nattrs(r)));
+	//int k = 0;
+	printf("%d k value \n",r->k);
+	//printf("%d page capacity",page_capacity);
 	// bitsString(h,buf); printf("hash = %s\n",buf);
 	// bitsString(p,buf); printf("page = %s\n",buf);
+	
+	//extract bucket pg to insert tuple
+	//printf("p value from reln.c %d\n",p);
 	Page pg = getPage(r->data,p);
+	
+	//after every k insertions, split
+	if(r->k == page_capacity){
+	  r->k = 0;
+	  //PageID newp = r->sp + power(2,r->depth);
+	  //printf("PAGE ID of new page %d",newp);
+	  PageID newp = addPage(r->data);
+	  //printf("new page ID %d",newp);
+	  //Page newpg = newPage();
+	  
+
+	  
+	  Page newpg = getPage(r->data,newp);
+	  PageID oldp = r->sp;
+	  //printf("%d",oldp);
+	  Page oldpg = getPage(r->data, oldp);
+          
+	  char *tuples_oldd = pageData(oldpg);
+	  printf(readTuple(r,r->data));
+          //Tuple t = readTuple(r,r->data);
+          //printf(t);
+	  
+	  while(tuples_oldd != NULL){
+	    
+	    Bits q = getLower(tupleHash(r,tuples_oldd),r->depth + 1);
+	    printf("q and newp %d %d\n",q,newp);
+	    //printf(tuples_old);printf("\n");
+	    if(q == newp){
+	      //if(addToPage(newpg,tuples_old)!= OK){printf("trtrtrt\n");}
+	      //printf("\n");
+	      addToPage(newpg,tuples_oldd);
+	      //r->ntups++;
+	      //putPage(r->data,newp,newpg);
+	      printf("succeess print\n");
+	      printf(tuples_oldd);
+	    }
+	    //else{
+	    //addToPage(oldpg,tuples_old);
+	    //}
+	    printf(tuples_oldd);
+	    tuples_oldd= tuples_oldd + tupLength(tuples_oldd);
+	    //printf(tuples_old);
+	  }
+	  
+	  printf("end of while");
+	  r->sp++;
+	  if(r->sp == power(2,r->depth)){
+	    r->depth++;
+	    r->sp = 0;
+	  }
+	  
+	}
+	
 	if (addToPage(pg,t) == OK) {
 		putPage(r->data,p,pg);
 		r->ntups++;
+		r->k++;
 		return p;
 	}
 	// primary data page full
+	//add tuple to new overflow page, in bucket pg and insert 
 	if (pageOvflow(pg) == NO_PAGE) {
 		// add first overflow page in chain
 		PageID newp = addPage(r->ovflow);
@@ -151,8 +228,10 @@ PageID addToRelation(Reln r, Tuple t)
 		if (addToPage(newpg,t) != OK) return NO_PAGE;
 		putPage(r->ovflow,newp,newpg);
 		r->ntups++;
+		r->k++;
 		return p;
 	}
+	//if the data page has overflow pages, scan thru all of them and add
 	else {
 		// scan overflow chain until we find space
 		// worst case: add new ovflow page at end of chain
@@ -169,6 +248,7 @@ PageID addToRelation(Reln r, Tuple t)
 				if (prevpg != NULL) free(prevpg);
 				putPage(r->ovflow,ovp,ovpg);
 				r->ntups++;
+				r->k++;
 				return p;
 			}
 		}
@@ -185,10 +265,13 @@ PageID addToRelation(Reln r, Tuple t)
 		pageSetOvflow(prevpg,newp);
 		putPage(r->ovflow,prevp,prevpg);
         r->ntups++;
+	r->k++;
 		return p;
 	}
 	return NO_PAGE;
 }
+
+
 
 // external interfaces for Reln data
 
