@@ -216,5 +216,6 @@ Tuple getNextTuple(Query q)
 
 void closeQuery(Query q)
 {
+	free(q);
 	// TODO
 }
