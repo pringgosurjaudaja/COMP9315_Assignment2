@@ -17,6 +17,7 @@ struct QueryRep {
 	PageID  curpage;   // current page in scan
 	int     is_ovflow; // are we in the overflow pages?
 	Offset  curtup;    // offset of current tuple within page
+	int curtuppage;
 	//TODO
 };
 
@@ -27,7 +28,7 @@ Query startQuery(Reln r, char *q)
 {
 	Query new = malloc(sizeof(struct QueryRep));
 	assert(new != NULL);
-	
+
 		// TODO
 	// Partial algorithm:
 	// form known bits from known attributes
@@ -35,7 +36,7 @@ Query startQuery(Reln r, char *q)
 	// compute PageID of first page
 	//   using known bits and first "unknown" value
 	// set all values in QueryRep object
-	
+
 	//added by Swarnava
 	Count nvals = nattrs(r);
 	int nstars = 0;
@@ -45,7 +46,7 @@ Query startQuery(Reln r, char *q)
 	//Bits tuple_hash = tupleHash(r,t);
 	Bits composite_hash = 0,not_known = 0, oneBit;
 	ChVecItem *cv = chvec(r);
-	
+
 	char **attris = malloc(nvals * sizeof(char *));
 	int i = 0;
 	for(;;){
@@ -63,7 +64,7 @@ Query startQuery(Reln r, char *q)
 	    q++; q0 = q;
 	  }
 	}
-	
+
 	Bits h[nvals + 1];
 	for(i = 0;i < nvals; i++){
 	  h[i] = hash_any((unsigned char *)attris[i],strlen(attris[i]));
@@ -72,8 +73,8 @@ Query startQuery(Reln r, char *q)
 	   printf("%s\n",buff);
 	   //printf("%s",attris[i]);
 	}
-	
-	
+
+
 	for(i = 0;i < nvals; i++){
 	  if(*attris[i] != '?'){
 	    //set d[i] bits in composite hash
@@ -89,10 +90,10 @@ Query startQuery(Reln r, char *q)
 	    }
 	    //bit_count = bit_count + depth(r);
 	  }
-	  
+
 	  else{
 	    //for(int k = bit_count;k < bit_count + depth(r);k++){
-	    for(int k = 0; k < MAXBITS; k++){  
+	    for(int k = 0; k < MAXBITS; k++){
 	      a = cv[k].att;
 	      b = cv[k].bit;
 	      if(a == i){
@@ -102,43 +103,44 @@ Query startQuery(Reln r, char *q)
 	      //else{
 	      //oneBit = bitIsSet(h[a],b);
 	      //composite_hash = composite_hash |  (oneBit << k);
-		
+
 	      //}
 	    }
 	    //bit_count = bit_count + depth(r);
-	    
+
 	  }
-	  
-	  
+
+
 	  // printf("%s",attris[i]);
 	}
 	char buffer[MAXBITS];
 	bitsString(composite_hash,buffer);
 	//printf("Bit COUUUNT %d\n",bit_count);
 	printf("KNOWN %s\n",buffer);
-	
+
 	char uknown[MAXBITS];
 	bitsString(not_known,uknown);
 	printf("UKNOWN %s\n",uknown);
-	
+
 	printChVec(chvec(r));
-	
+
 	new->known = composite_hash;
 	new->unknown = not_known;
 	new->rel = r;
 	new->curpage = 0;
+	new->curtuppage=0;
 	//find first page
 	//char unknown[MAXBITS];
 	//int value_of_bit;
 	//bitsString(new->unknown, unknown);
 	//for(i = 0; i < depth(r), i++){
-	// 
+	//
 	//}
-	
+
 	new->is_ovflow = 0;
 	new->curtup = 0;
-	
-	
+
+
 
 	return new;
 }
@@ -161,6 +163,52 @@ Tuple getNextTuple(Query q)
 	// if (current page has no matching tuples)
 	//    go to next page (try again)
 	// endif
+	int x=0;
+	//int i = q->curtuppage;
+	int z =0;
+	int offset = q->curtup;
+	Page p =  getPage(dataFile(q->rel),q->curpage);
+	Tuple t[MAXTUPLEN];
+	Tuple comp[MAXTUPLEN];
+	if(q->curtup <= p->ntuples){
+		while (q->curtuppage<=p->ntuples) {
+			z==0;
+			while(p->data[offset]!='\0'){
+				comp[z] = p->data[offset];
+				offset++;
+				z++;
+			}
+			if(tupleMatch(t,q->known)&& tupleMatch(t,q->unknown)){
+				q->curtup = offset;
+				return t;
+			}
+			q->curtuppage++;
+		}
+	}
+	else if(pageOvflow(p)!= NO_PAGE){
+
+	}
+	else{
+		//go next page
+		q->curpage++;
+		q->curtuppage=0;
+		q->curtup=0;
+		p = getPage(dataFile(q->rel),q->curpage);
+		offset = 0;
+		while (q->curtuppage<=p->ntuples) {
+			z==0;
+			while(p->data[offset]!='\0'){
+				comp[z] = p->data[offset];
+				offset++;
+				z++;
+			}
+			if(tupleMatch(t,q->known)&& tupleMatch(t,q->unknown)){
+				q->curtup = offset;
+				return t;
+			}
+			q->curtuppage++;
+		}
+	}
 	return NULL;
 }
 
